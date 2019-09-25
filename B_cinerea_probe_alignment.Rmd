@@ -49,12 +49,15 @@ fontFmt = function(x,font="consolas"){
 
 ```{r captions, include=FALSE, eval=TRUE}
 figs <- captioner(prefix="Figure")
+figs(name="GC_cont", "GC content per sample in WGS reads.")
+figs(name="kmer_plots", "K-mer distribution in 4 selected isolates and the predicted genome size and ploidy.")
 tbls <- captioner(prefix="Table")
 tbls(name="samples","Botrytis isolates used for DNA sequencing.")
-tbls(name="mapping_rates", "Mapping rates of the WGS reads to the Botrytis cinerea B05.10 reference genome.")
+tbls(name="mapping_rates", "Mapping rates of the WGS reads to the <i>Botrytis cinerea</i> B05.10 reference genome.")
 tbls(name="mapping_sum", "Mapping statistics.")
 isolate_table <- readxl::read_excel("./sample_info/Botrytis_isolates_for_WGS_CAGRF20074.xlsx") %>% 
-  set_names(., gsub("\\s+", "_", colnames(.))) %>% select(Sample_ID=Tube_ID, Sample_name, Species)
+  set_names(., gsub("\\s+", "_", colnames(.))) %>% select(Sample_ID=Tube_ID, Sample_name, Species) %>% 
+  mutate(Sample_name=gsub("\\s+", "_", Sample_name))
 # sequencing_table <- readxl::read_excel("./sample_info/A_rabiei_isolate_list_for_wgs.xlsx", sheet = "submission_info") 
 sequencing_dict <- set_names(isolate_table$Sample_name, isolate_table$Sample_ID)
 # samples_table <- isolate_table %>% arrange(desc(Pathogenicity), desc(Collection_Year), Site)
@@ -100,7 +103,7 @@ kable(isolate_table) %>%
 
 ## Methods
 DNA-Seq data processing, mapping and variant calling were performed on the _Griffith University Gowonda HPC Cluster_ (using Torque PBS scheduler), following the methods specified by @hagiwara_whole-genome_2014 (see details in Appendix 2), @haas_approaches_2011, @hittalmani_novo_2016 and @verma_draft_2016.  
-Detailed methods, including code for running each of the analyses steps are provided in the associated [A_rabiei_WGS_analysis GitHub repository](https://github.com/IdoBar/A_rabiei_WGS_analysis).
+Detailed methods, including code for running each of the analyses steps are provided in the associated [Botrytis_cinerea_probe_alignment GitHub repository](https://github.com/IdoBar/Botrytis_cinerea_probe_alignment).
 
 ### Data pre-processing
 Install needed software in a `conda` environment on Gowonda2.
@@ -119,7 +122,7 @@ easy_install -U pdfx
 Adaptors needed to be removed, as well as very low quality bases/reads, so trimming was performed with BBduk (from BBMap v38.34). See official download page on [SourceForge](https://sourceforge.net/projects/bbmap/), [user guide](http://jgi.doe.gov/data-and-tools/bbtools/bb-tools-user-guide/bbduk-guide/) and [SEQanswers thread](http://seqanswers.com/forums/showthread.php?t=42776).  
 
 ### Mapping to the reference genome (using Bowtie2)
-The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 [@verma_draft_2016] using Bowtie2 (version 2.3.4.3) with the `--very-sensitive` option in `--end-to-end` (global) mode. The resulting SAM files were processed to mark duplicates with SAMBLASTER v0.1.24 [@faust_samblaster:_2014] and converted into coordinate-sorted, indexed BAM files with read groups using [Picard v2.18.22](https://broadinstitute.github.io/picard/).     
+The trimmed reads were mapped to the _A. rabiei_ reference genome, strain Me14 [@verma_draft_2016] using Bowtie2 (version 2.3.5) with the `--very-sensitive` option in `--end-to-end` (global) mode. The resulting SAM files were processed to mark duplicates with SAMBLASTER v0.1.24 [@faust_samblaster:_2014] and converted into coordinate-sorted, indexed BAM files with read groups using [Picard v2.18.22](https://broadinstitute.github.io/picard/).     
 Raw files quality after adaptor trimming was assessed with `r fontFmt("FastQC")` (v0.11.8). Post-trimming and mapping statistics were consolidated into a single, interactive report for each batch using `r fontFmt("MultiQC")` v1.0 [@ewels_multiqc:_2016]
 
 
@@ -229,8 +232,12 @@ find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStat
 
 
 #### Contaminations in samples
-Both the initial QC and the mapping results show that there was a contamination in the DNA samples of at least three isolates: 16CUR019, 15CUR003, FT15023. This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the low mapping rates of these isolates to the _B. cinerea_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).  
-FT15023 in particular mapped at low rate to the _B. cinerea_ reference genome (~7%).  
+Both the initial QC and the mapping results show that there were contaminations in the DNA samples of several isolates. This conclusion was obvious from the different GC content signatures of the three isolates (`r figs(name="GC_cont",display="cite")`) compared with the other isolates and from the low mapping rates of these isolates to the _B. cinerea_ reference genome (see bottom of `r tbls(name="mapping_rates",display="cite")`).  
+Isolate 9136 in particular mapped at low rate to the _B. cinerea_ reference genome (~7%).  
+
+```{r QC_GC, eval=TRUE, echo=FALSE, out.width='100%', fig.cap=figs("GC_cont")}
+include_graphics("output/plots/fastqc_per_sequence_gc_content_plot.png")
+```
 
 Samples with less than 40% mapping and x15 coverage were removed from the rest of the analysis (see highlighted rows in `r tbls(name="mapping_rates",display="cite")`).  
 _To process mapping summary table, copy the `xxx.stats` and `qualimap.html` files into the `data` folder_
@@ -272,7 +279,7 @@ qualimap_results <-  qualimap_files %>% map_df(~htmltab(., which = "//td/b[text(
 datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))), caption=tbls("mapping_rates")) %>% #, 
           # options = list(dom = 'tf', pageLength = 40)) %>%
   formatStyle("Coverage", target = "row",
-  backgroundColor = styleInterval(c(10,20), c('#ef3125', '#feed95', NA))
+  backgroundColor = styleInterval(c(20,40), c('#ef3125', '#feed95', NA))
 )
 
 # pander(as.data.frame(qualimap_results), caption=tbls("mapping_rates"), justify="left")
@@ -287,13 +294,8 @@ datatable(as.data.frame(qualimap_results %>% mutate_if(is.numeric, ~round(., 2))
 ```
 
 
-
-```{r QC_GC, eval=FALSE, echo=FALSE, out.width='100%', fig.cap=figs("GC_cont")}
-include_graphics("plots/fastqc_per_sequence_gc_content_plot.png")
-```
-
 #### Assess genome size and ploidy
-The sequencing data of 2 isolates with sufficient coverage and no contamination were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome. The selected samples were samples DON001 (Macrogen batch), 7_S40 (AgriVic batch) and AGRF_11 (AGRF batch), see coverage details in `r tbls(name="mapping_rates",display="cite")`.  
+The sequencing data of 4 isolates with sufficient coverage and no apparent contamination were analyzed for their k-mer content (coverage and distribution) to estimate the genome size and ploidy of the genome.  
 k-mer counting and genome ploidy and size estimation were performed with `kmercountexact.sh` (from BBMap v38.34, using the odd numbers in the range of 21-37 as kmers, i.e 21, 23, 25..35, 37 (see [SeqAnsewes thread](http://seqanswers.com/forums/showthread.php?t=64086)).  
 Similar analysis can be performed by Jellyfish (see [tutorial](http://koke.asrc.kanazawa-u.ac.jp/HOWTO/kmer-genomesize.html))
 ```{bash kmer_analysis}
@@ -306,13 +308,13 @@ cd !$
 # Prepare PBS script
 echo '#!/bin/bash -x
 #PBS -V
-#PBS -l select=1:ncpus=12:mem=48GB,walltime=01:30:00
+#PBS -l select=1:ncpus=12:mem=48GB,walltime=00:30:00
 
 cd $PBS_O_WORKDIR
 gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR==ARRAY_IND' \${CMDS_FILE} | bash" > ${RUN}.pbspro
 
 # run BB kmercount
-SAMPLES=(seq 17 20)
+SAMPLES=($(seq 17 20))
 for SAMPLE in "${SAMPLES[@]}"; do
   ln -s /export/home/s2978925/data/Marzia/B_cinerea_WGS/AGRF_CAGRF20074_HFLHKDRXX/AGRF_BT2_process_19_09_2019/trimmed_${SAMPLE}*.fastq.gz ./
   seq 21 2 37 | parallel --dry-run kmercountexact.sh k={} in=trimmed_${SAMPLE}_R1.fastq.gz in2=trimmed_${SAMPLE}_R2.fastq.gz khist=${SAMPLE}_khist_k{}.txt peaks=${SAMPLE}_peaks_k{}.txt > ${SAMPLE}_${RUN}.bash
@@ -332,7 +334,7 @@ find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStat
 # aggregate data from all output files (and transpose)
 
 grep "^#" ${SAMPLES[0]}_peaks_k21.txt  | head -n -1 | sed "s/#//" | cat <( printf "sample\t%s\n" $SAMPLE) - | cut -f1 | paste -s > kmer_peaks_summary.txt
-parallel "grep "^#" {1}_peaks_k{2}.txt | head -n -1 | sed "s/#//" | cat  <(echo {1}) - | cut -f2 | paste -s" ::: ${SAMPLES[@]} ::: $(seq 21 2 37)
+parallel "grep "^#" {1}_peaks_k{2}.txt | head -n -1 | sed "s/#//" | cat  <(echo {1}) - | cut -f2 | paste -s" ::: ${SAMPLES[@]} ::: $(seq 21 2 37) >> kmer_peaks_summary.txt
 # for SAMPLE in "${SAMPLES[@]}"; do
 #  ls -1 ${SAMPLE}_peaks*.txt | parallel "grep "^#" {} | head -n -1 | sed "s/#//" | cat  <(echo $SAMPLE) - | cut -f2 | paste -s" >> kmer_peaks_summary.tst
 #  done
@@ -345,19 +347,58 @@ parallel "tail -n +2 {1}_khist_k{2}.txt | gawk '{print \"{1}\t{2}\t\"\$0}'" ::: 
 
 ```
 
+``` {r kmer_summary, eval=TRUE, echo=FALSE}
+kmer_hist <- read_tsv("data/khist_summary.txt") %>% 
+  set_names(., c("Sample", "kmer", "Depth", "Count", "logScale")) %>%  mutate(Sample=sequencing_dict[Sample])
+# kmer_hist %>% group_by(Sample) %>% slice(max(main_peak))
+
+kmer_peaks <- read_tsv("data/kmer_peaks_summary.txt")
+# summarise peaks to calculate average predicted genome size and 
+peaks_summary <- kmer_peaks %>%  mutate(Sample=sequencing_dict[sample]) %>% group_by(Sample) %>%
+  summarise(mean_genome_size=mean(genome_size),genome_size_SE=se(genome_size), max_cov=max(main_peak), 
+            ploidy=max(ploidy)) %>% 
+  arrange(max_cov) %>% mutate(Sample=forcats::fct_inorder(Sample), 
+                              genome_label=sprintf("%s\u2009bp (±%s)", scales::comma(mean_genome_size/1000), 
+                                           round(genome_size_SE, digits = 0)))
+```
+
+The selected samples were `r paste0(levels(peaks_summary$Sample), collapse=", ")`, see coverage details in `r tbls(name="mapping_rates",display="cite")`. 
 The resulting kmer count data for all samples and kmers was aggregated into tables and summarised in the following plots
 
-``` {r kmer_analysis, eval=TRUE, echo=FALSE}
-kmer_hist <- read_tsv("raw_data/khist_summary.txt") %>% 
-  set_names(., c("Sample", "kmer", "Depth", "Count", "logScale"))
-# limit range (ignore unique kmers with very low depth)
-plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2)
 
-# plot for each kmer
-ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=Sample)) + scale_y_continuous(labels = comma) +
-  geom_line(size=1) + scale_color_paletteer_d(awtools, mpalette) + # RColorBrewer, Set1
-  facet_wrap(vars(kmer)) + plot_theme()
-kmer_peaks <- read_tsv("raw_data/kmer_peaks_summary.txt")
+``` {r kmer_plot, eval=TRUE, echo=FALSE, out.width='100%', fig.cap=figs("kmer_plots")}
+# limit range (ignore unique kmers with very low depth)
+plot_hist <- kmer_hist %>% filter(Depth<200, Depth>2) %>% 
+  mutate(kmer=factor(kmer), Sample=factor(Sample, levels = levels(peaks_summary$Sample)))#, kmer==31) #  
+
+# filter(k==31) %>% rename(Sample=sample)
+
+# plot for each kmer (check out the following to support UniCODE characters: https://stackoverflow.com/questions/12768176/unicode-characters-in-ggplot2-pdf-output) , thin space: \u2009
+ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=kmer)) + 
+  scale_y_continuous(labels = scales::comma) +
+  geom_line(size=1) + scale_color_paletteer_d(pals, tol) + # ggsci, default_aaas; RColorBrewer, Set1; awtools, mpalette
+  facet_wrap(vars(Sample)) + plot_theme(baseSize = 16) + 
+  geom_text(aes(x=15, y=2.0e6, 
+                label=sprintf("Predicted ploidy=%sn\nGenome size=%s(±%s) Kbp", ploidy, 
+                              scales::comma(mean_genome_size/1000), round(genome_size_SE/1000, digits = 1))),  
+                        # format(genome_size, scientific = TRUE, digits = 3))) / comma(genome_size)
+            data=peaks_summary, hjust=0, colour="black", size=3.5)
+
+```
+
+``` {r kmer_save_plot, eval=TRUE, include=FALSE}
+# plot for each kmer (check out the following to support UniCODE characters: https://stackoverflow.com/questions/12768176/unicode-characters-in-ggplot2-pdf-output) , thin space: \u2009
+ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=kmer)) + 
+  scale_y_continuous(labels = scales::comma) +
+  geom_line(size=1) + scale_color_paletteer_d(pals, tol) + # ggsci, default_aaas; RColorBrewer, Set1; awtools, mpalette
+  facet_wrap(vars(Sample)) + plot_theme() + 
+  geom_text(aes(x=15, y=2.0e6, 
+                label=sprintf("Predicted ploidy=%sn\nGenome size=%s(±%s) Kbp", ploidy, 
+                              scales::comma(mean_genome_size/1000), round(genome_size_SE/1000, digits = 1))),  
+                        # format(genome_size, scientific = TRUE, digits = 3))) / comma(genome_size)
+            data=peaks_summary, hjust=0, colour="black", size=5)
+
+ggsave(filedate("Botrytis_cinerea_2019_kmer_analysis_size_CI", ".pdf", "output/plots"),  width=13, height=7.5)
 ```
 
 
@@ -415,81 +456,8 @@ find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStat
 ```
 
 
-### Variant Annotation
-Variants were then further filtered to keep only polymorphic and bi-allelic SNPs using the `r fontFmt("VariantAnnotation")` v`r packageVersion("VariantAnnotation")` and `r fontFmt("GenomicRanges")` v`r packageVersion("GenomicRanges")` R Bioconductor packages [@obenchain_variantannotation:_2014; @lawrence_software_2013]. The SNPs were annotated and position of each variant relative to gene locations was determined (coding/intron/promotor/intergenic), based on the reference genome and gene models of _A. rabiei_ strain _Me14_ (where the contig names were shortened to remove the `Arab_Me14` prefix). 
 
-```{bash fix_contig_names}
-cat A.rabiei_me14.fasta | sed 's/Arab_Me14_//' > A_rabiei_me14_short_names.fasta
-zcat Arab_me14.gff3.gz | sed 's/Arab_Me14_//' > Arab_me14_short_names.gff
-```
-
-Variants in coding regions of genes were identified as Synonymous/Non-synonymous/Non-sense mutations if they were silent, changing the amino acid or the reading frame, respectively. Additional annotation of the genes at each SNP site was performed by a BLASTp search against the NCBI non-redundant protein database (nr) and scanning against the InterPro conglomerate dbs. Effector prediction of the variant-associated genes was performed by `r fontFmt("EffectorP")` v1.0/2.0 [@SperschneiderEffectorPpredictingfungal2016;@JanaImprovedpredictionfungal2018]. The variants were summarised and visualised across the genome scaffolds and visualised using `r fontFmt("circlize")` v`r packageVersion("circlize")` R package [@gu_circlize_2014].
-
-```{bash interproscan}
-# Download the python wrapper
-
-$HPC_GRID_RUNNER_DIR/BioIfx/hpc_FASTA_GridRunner.pl --cmd_template "cd $PBS_O_WORKDIR; pyenv shell miniconda3-latest; ~/etc/tools/Annotation/InterPro/iprscan5_urllib3.py --sequence=__QUERY_FILE__ --outfile=__QUERY_FILE__.interpro.tsv --outformat=tsv --goterms --pathways --email=i.bar@griffith.edu.au " --query_fasta Assoc_SNP_genes_cds_05_02_2018.fasta -G $HPC_GRID_RUNNER_DIR/hpc_conf/small_PBS_jobs.conf -N 1 -O SNP_interpro
-```
-
-Look for particular effector genes and genes associated with plant-pathogen interactions and pathogenicity genes. Look in the literature and create a list of target genes.
-
-### Variant-Pathogenicity association
-Association between variants and pathogenicity levels was identified by `r fontFmt("SNPassoc")` v`r packageVersion("SNPassoc")` R package [@gonzalez_snpassoc:_2007], using a codominant gene model and a significance threshold of _p_-value $\le0.005$.  
-
-
-
-## Alternative analyses
-
-## Appendix 1. Additional analyses (not used)
-#### Genotype Imputation
-The resulting SNPs were used as a basis for imputation to try and infer missing genotypes by assessing linkage between markers and fixed haplotypes.  
-Several methods were tested:
-1. Imputation was performed with `r fontFmt("LinkImpute", custom_font)` [@money_linkimpute:_2015], using a KNNi algorithm, as implemented in `r fontFmt("TASSEL", custom_font)` v5.2.40 [@glaubitz_tassel-gbs:_2014]. 
-2. With `r fontFmt("LinkImputeR", custom_font)` v1.1.1 [@money_linkimputer:_2017], using an improved KNNi algorithm.  
-
-```{bash vcf_linkimputer}
-# Genotype imputation with LinkImputeR
-alias LinkImputeR='java -jar /c/Bioinformatics/Tools/linkimputer/LinkImputeR.jar'
-# edit `accuracy.ini` and modify input file name and other parameters:
-[Input]
-filename = ../A_rabiei_on_me14_DP_GQ_corr.bt2.fb.snps.vcf
-save = A_rabiei_on_me14_DP_GQ_corr.bt2.fb.snps.filtered.vcf
-maxdepth = 200
-
-[InputFilters]
-maf=0.001
-positionmissing = 0.6
-hw=0.05
-
-[Global]
-depth = 5
-
-[CaseFilters]
-missing = 0.6,0.7,0.8,0.9
-maf=0.001, 0.01,0.05,0.1,0.15,0.2
-
-[Accuracy]
-numbermasked = 5000
-# Create a folder for the statistics
-mkdir Linkimputer_stats
-# Run LinkImputeR to assess accuracy (doesn't seem to be working on Windows)
-LinkImputeR -s accuracy.ini
-# Impute genotypes
-LinkImputeR Linkimpute2.xml 'Case 10' gstacks_case4.imputed.vcf # Miss=0.7, MAF=0.05, Samples=20, Markers=1134
-LinkImputeR Linkimpute2.xml 'Case 18' gstacks_case18.imputed.vcf # Miss=0.4, MAF=0.2, Samples=130, Markers=11422
-
-# Fix error in field annotation
-sed -i.bak 's/ID=UG/ID=OG/g' gstacks_case18.imputed.vcf
-sed -i.bak 's/ID=UG/ID=OG/g' gstacks_case4.imputed.vcf
-
-```
-
-After filtration, the `.vcf` file was converted to `r fontFmt("PLINK")`'s `.tped` format. In order to export to `r fontFmt("PLINK")` format, a `.tfam` file was created, which contains a table like `r tbls(name="tfam",display="cite")` (without the header line).
-```{r tfam_table, eval=TRUE} 
-pander(as.data.frame(head(tfam_table)), caption=tbls("tfam"), justify="left")
-```
-
-## Appendix 2. Useful resources
+## Appendix 1. Useful resources
 
 * Whole-Genome Comparison of _Aspergillus fumigatus_ Strains Serially Isolated from Patients with Aspergillosis. [@hagiwara_whole-genome_2014]:
 

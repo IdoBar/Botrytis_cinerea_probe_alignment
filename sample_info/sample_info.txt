@@ -1,0 +1,23 @@
+Tube_ID	Sample ID	Sample name	Species
+1	1	214/99	Botrytis cinerea
+2	3	B589-2	Botrytis cinerea
+3	4	B757-4	Botrytis cinerea
+4	6	9053	Botrytis cinerea
+5	7	10418	Botrytis cinerea
+6	8	Kingsford2	Botrytis cinerea
+7	9	9136	Botrytis cinerea
+8	14	8748	Botrytis cinerea
+9	15	8880	Botrytis cinerea
+10	16	9345	Botrytis cinerea
+11	18	9564	Botrytis cinerea
+12	19	9653	Botrytis cinerea
+13	10412	10412	Botrytis cinerea
+14	TR9815	TR9815	Botrytis cinerea
+15	BGM Pod S.H#3	BGM Pod S.H-3	Botrytis cinerea
+16	8762	8762	Botrytis cinerea
+17	8763	8763	Botrytis cinerea
+18	9550	9550	Botrytis cinerea
+19	B402	B402	Botrytis cinerea
+20	B775 #1	B775-1	Botrytis cinerea
+21	11	B16-1	Botrytis fabae
+22	12	B16-2	Botrytis fabae
