@@ -394,7 +394,7 @@ ggplot(plot_hist, mapping = aes(x=Depth, y=Count, colour=kmer)) +
   facet_wrap(vars(Sample)) + plot_theme() + 
   geom_text(aes(x=15, y=2.0e6, 
                 label=sprintf("Predicted ploidy=%sn\nGenome size=%s(±%s) Kbp", ploidy, 
-                              scales::comma(mean_genome_size/1000), round(genome_size_SE/1000, digits = 1))),  
+                      scales::comma(mean_genome_size/1000), round(genome_size_SE/1000, digits = 1))),  
                         # format(genome_size, scientific = TRUE, digits = 3))) / comma(genome_size)
             data=peaks_summary, hjust=0, colour="black", size=5)
 
@@ -403,56 +403,28 @@ ggsave(filedate("Botrytis_cinerea_2019_kmer_analysis_size_CI", ".pdf", "output/p
 
 
 #### Extract primer regions
-The alignment files of the samples (excluding the ones that did not pass QC) were combined into a single file that was used cropped to the primer regions to focus and vsualise the alignments.
+The alignment files of the samples (excluding the ones that did not pass QC) were combined into a single file that was used cropped to the primer regions to focus and visualise the alignments.
+_Prepare a `fasta` file with the primer sequences and copy to the server_
 
 ```{bash crop_bams}
-# save read groups to file
-sambamba view -H all.csorted.combined.bam | grep "^@RG" > all_read_groups.txt
-# BAM_FILES=$( ls -1 $MERGE_JOB/*.csorted.bam | gawk -vORS=" " '1' )
-# calculate coverage
-CALC_COV=$( echo "cd $( pwd ) ;  sambamba depth base --combined all.csorted.combined.bam | cut -f 1-3 | tail -n +2 | coverage_to_regions.py $GENOME.fasta.fai 500 > targets.regions " | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N Calc_cov -W depend=afterok:$FINAL_MERGE_ID ) # 5248672.pbsserver
-CALC_COV_ID=$( echo $CALC_COV | egrep -o "[0-9]{7}")
-# /export/home/s2978925/.pyenv/versions/miniconda2-latest/bin/bamtools coverage -in
-# prepare Freebayes commands
-FB=freebayes_${DATE}
-FB_CMDS=$( echo "cd $( pwd ) ; cat targets.regions | parallel --dry-run -k \"freebayes -p $PLOIDY -f $GENOME.fasta all.csorted.combined.bam --region {}\" > $FB.cmds" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=5:00:00 -N FB_cmds -W depend=afterok:$CALC_COV_ID ) # 5248672.pbsserver
-# get job_id
-FB_CMDS_ID=$( echo $FB_CMDS | egrep -o "[0-9]{7}")
+# Prepare Botrytis reference genome as a Blast db
+GENOME="$HOME/scratch/data/reference_genomes/Fungal_genomes/B.cinerea/GCA_000143535.4_ASM14353v4"
+ makeblastdb -dbtype nucl -in ${GENOME}_genomic.fna -out /export/home/s2978925/etc/tools/Annotation/protein_dbs/Bc_B10.05
+# Blast primer sequences against the genome 
+blastn -query primer_seqs.fasta -db /export/home/s2978925/etc/tools/Annotation/protein_dbs/Bc_B10.05 -outfmt 6 -task "blastn-short"  -evalue 1e-3 > primer_seqs.outfmt6
+# get gene sequences and BLAST against the genome
+# find Nep1 genomic sequence (based on its gene id)
+esearch -db "gene" -query "5433262" | efetch -format fasta 
+# download the genomic sequences as fasta
+efetch -db nuccore -id 'NC_037311.1' -seq_start 2013643 -seq_stop 2016038 -format fasta > primer_gene_seqs.fasta
 
-# Send freebayes jobs to the cluster
-# Prepare PBS script
-echo '#!'"/bin/bash -v
-#PBS -V
-#PBS -l select=1:ncpus=${NCORES}:mem=64GB,walltime=20:00:00
-"'
-cd $PBS_O_WORKDIR
-ARRAYID=$( echo $PBS_ARRAY_ID | egrep -o "[0-9]{7}" )
-gawk -v ARRAY_IND=$PBS_ARRAY_INDEX'" 'NR>(${NCORES}*3*(ARRAY_IND-1)) && NR<=(ARRAY_IND*${NCORES}*3)' \${CMDS_FILE} | parallel -k -j ${NCORES} --joblog"' ${CMDS_FILE}.p$ARRAYID.$PBS_ARRAY_INDEX' > freebayes.pbspro
-
-NCMDS=$( wc -l $FB.cmds | gawk '{print $1}')
-NJOBS=$(( NCMDS/NCORES/3 + 1  ))
-FB_JOB=$( qsub -J1-$NJOBS -N ${FB:0:11} -W depend=afterok:$FB_CMDS_ID -vCMDS_FILE=$FB.cmds freebayes.pbspro )
-# 5270639[1-4] completed successfully (the rest needed more processing time)
-FB_JOB_ID=$( echo $FB_JOB | egrep -o "[0-9]{7}")
-
-CONCAT_FB=$( echo "cd $( pwd ) ; cat *.o$FB_JOB_ID* | vcffirstheader | vcfstreamsort -w 1000 | vcfuniq > A_rabiei_2018_isolates_haplo.fb.vcf" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcf -W depend=afterok:$FB_JOB_ID[] -m e -M i.bar@griffith.edu.au)
-CONCAT_FB_ID=$( echo $CONCAT_FB | egrep -o "[0-9]{7}" )
-
-# check for success/failure of FB commands
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==1' > $FB.failed.cmds
-tail -n +2 $FB.cmds.p*.* | cut -f7,9 | gawk '$1==0' > $FB.successful.cmds
-
-# Produce vcf stats
-SAMPLES=$( cut -f6 all_read_groups.txt | gawk -F":" -vORS="," '{print $2}' | sed 's/,$//' )
-FB_STATS=$( echo "cd $( pwd ) ; mkdir ${FB}_stats; bcftools stats -F $GENOME.fasta -s $SAMPLES A_rabiei_2018_isolates_haplo.fb.vcf > ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats; plot-vcfstats -p ${FB}_stats ${FB}_stats/A_rabiei_2018_isolates_haplo.fb.vcf.stats" | qsub -V -l select=1:ncpus=${NCORES}:mem=96GB,walltime=10:00:00 -N FB_vcfstats -W depend=afterok:$CONCAT_FB_ID -m e -M i.bar@griffith.edu.au)
-FB_STATS_ID=$( echo $FB_STATS | egrep -o "[0-9]{7}" )
-
-# find and remove empty files
-find . -size 0 -exec rm {} +
-
-# check jobs completion
-find . -regextype posix-egrep -regex '\./.*\.e[0-9]{7}.*' | xargs grep "ExitStatus"
-
+# Save the primer genomic coordinates and edit manualy (at this stage) to take ~2-5kb region around each region
+gawk '{printf "%s:%s-%s\n", $2, $9,$10}' primer_seqs.outfmt6 > primer_regions.txt
+# crop both bam files to these regions (:::: takes the content of the file as input)
+parallel --dry-run "sambamba view -f bam {2} {1} > {2.}_{=1 s/:/_/ =}.bam" ::: $( cat primer_regions.txt) ::: *.combined.bam | sed "s/'//g" | parallel
+# index the files (can also be done from R)
+parallel sambamba index ::: *csorted.combined_CP*.bam
+# copy bam files across
 ```
 
 

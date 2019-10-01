@@ -1,0 +1,14 @@
+HistoryId: NCID_1_15754431_130.14.18.48_5555_1569903914_236951604_0MetA0_S_HStore
+QueryKey: 14
+ReleaseType: GenBank
+FileType: GENOME_FASTA
+Flat: true
+
+Query title: Select 1 document(s)
+    
+Search results count: 1
+Entries to download: 1
+
+GENOME_FASTA files in archive: 1
+Total size (bytes): 13501257
+Total time: 6.33 seconds
